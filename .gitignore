@@ -2,8 +2,12 @@
 .env
 .venv
 /data
+<<<<<<< HEAD
 .DS_Store
 backend/.env
 /data
 *.jpg
+=======
+
+>>>>>>> 91d07e0ba564c6fe97ac0c78eaaf30a034091c60
 .DS_Store
