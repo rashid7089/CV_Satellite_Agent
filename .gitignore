@@ -1,9 +1,8 @@
-
 .env
-.venv
-/data
-.DS_Store
 backend/.env
-/data
+.venv
+data/
+.DS_Store
 *.jpg
-.DS_Store__pycache__/
+__pycache__/
+*.pyc
