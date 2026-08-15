@@ -54,19 +54,11 @@ def classify_image(image_id: str) -> dict[str, Any]:
               prediction's image reference). This tool does not accept
               raw image bytes.
     """
-    try:
-        resp = httpx.post(
-            f"{BACKEND_URL}/api/v1/predict",
-            json={"image_id": image_id},
-            timeout=TIMEOUT_S,
-        )
-        resp.raise_for_status()
-        return resp.json()
-    except httpx.HTTPStatusError as exc:
-        return {"error": True, "status_code": exc.response.status_code,
-                "message": f"Classification failed: backend returned {exc.response.status_code}"}
-    except httpx.RequestError as exc:
-        return {"error": True, "message": f"Could not reach backend: {exc}"}
+    return {
+        "error": True,
+        "message": "No image bytes were provided to this tool. Attach the image in Open WebUI "
+                   "or upload it through the main frontend; do not invent an image id.",
+    }
 
 
 def get_prediction_history(limit: int = 5) -> dict[str, Any]:
