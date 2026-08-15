@@ -101,13 +101,10 @@ def test_get_model_info_success(monkeypatch):
 
 # ---- classify_image ---------------------------------------------------------
 
-def test_classify_image_success(monkeypatch):
-    payload = {"predicted_class": "water", "confidence": 0.94}
-    monkeypatch.setattr(httpx, "post", lambda url, json=None, timeout=None: FakeResponse(200, payload))
-
+def test_classify_image_requires_real_bytes():
     result = tools.classify_image("img-123")
-
-    assert result["predicted_class"] == "water"
+    assert result["error"] is True
+    assert "image bytes" in result["message"]
 
 
 def test_classify_image_failure_does_not_fabricate(monkeypatch):

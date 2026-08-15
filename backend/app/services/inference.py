@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from tensorflow import keras
 
 from app.config import settings
 
@@ -27,9 +28,8 @@ _model_loaded = False
 # Must match the preprocessing used during training.
 INPUT_SIZE = (128, 128)          # (width, height) for PIL resize
 
-# Set to True ONLY if the Keras model does NOT already contain a
-# Rescaling(1./255) layer. Applying it twice produces garbage predictions.
-RESCALE_MANUALLY = False
+# The saved model has no Rescaling layer; training divided input pixels by 255.
+RESCALE_MANUALLY = True
 
 FALLBACK_LABELS = ["cloudy", "desert", "green_area", "water"]
 
@@ -64,7 +64,6 @@ def _load_labels() -> list[str]:
 def load_model() -> None:
     """Load the .keras artifact once at application startup."""
     global _model, _labels, _model_loaded
-
     _labels = _load_labels()
 
     path = Path(settings.model_path)
@@ -74,9 +73,12 @@ def load_model() -> None:
         return
 
     try:
-        import tensorflow as tf
-
-        _model = tf.keras.models.load_model(path)
+        _model = keras.models.load_model(path, compile=False)
+        output_classes = int(_model.output_shape[-1])
+        if output_classes != len(_labels):
+            raise ValueError(
+                f"Model outputs {output_classes} classes but labels.json contains {len(_labels)} labels"
+            )
         _model_loaded = True
 
         log.info(

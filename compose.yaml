@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cvapp}
+      POSTGRES_USER: ${POSTGRES_USER:-cvuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cvpassword}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER:-cvuser} -d ${POSTGRES_DB:-cvapp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  backend:
+    build: {context: ., dockerfile: backend/Dockerfile}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cvuser}:${POSTGRES_PASSWORD:-cvpassword}@postgres:5432/${POSTGRES_DB:-cvapp}
+      MODEL_PATH: /app/models/ResNet_history.keras
+      LABELS_PATH: /app/models/labels.json
+      MODEL_NAME: ${MODEL_NAME:-ResNet18}
+      MODEL_VERSION: ${MODEL_VERSION:-1.0.0}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+    depends_on:
+      postgres: {condition: service_healthy}
+    ports: ["${BACKEND_PORT:-8000}:8000"]
+  frontend:
+    build: {context: ., dockerfile: frontend/Dockerfile}
+    restart: unless-stopped
+    depends_on:
+      backend: {condition: service_healthy}
+    ports: ["${FRONTEND_PORT:-3000}:80"]
+  agent:
+    build: {context: ., dockerfile: agent/Dockerfile}
+    restart: unless-stopped
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-anthropic.claude-3-5-sonnet-20241022-v2:0}
+      BACKEND_URL: http://backend:8000
+      AGENT_API_KEY: ${AGENT_API_KEY:-local-agent-key}
+      AGENT_MODEL_NAME: ${AGENT_MODEL_NAME:-satellite-cv-agent}
+    depends_on:
+      backend: {condition: service_healthy}
+    ports: ["${AGENT_PORT:-8010}:8010"]
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    environment:
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:-change-this-in-production}
+      ENABLE_SIGNUP: ${ENABLE_SIGNUP:-true}
+      ENABLE_OLLAMA_API: "false"
+      ENABLE_OPENAI_API: "true"
+      OPENAI_API_BASE_URL: http://agent:8010/v1
+      OPENAI_API_KEY: ${AGENT_API_KEY:-local-agent-key}
+      ENABLE_PERSISTENT_CONFIG: "false"
+      AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST: "30"
+    depends_on:
+      agent: {condition: service_healthy}
+    volumes: [open_webui_data:/app/backend/data]
+    ports: ["${OPEN_WEBUI_PORT:-8080}:8080"]
+volumes:
+  postgres_data:
+  open_webui_data:
