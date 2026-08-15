@@ -8,8 +8,8 @@ import boto3
 from agent.prompts import SYSTEM_PROMPT
 from agent.tools import TOOL_DISPATCH, TOOL_SPECS
 
-MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20241022-v2:0")
-REGION = os.environ.get("AWS_REGION", "us-east-1")
+MODEL_ID = os.environ.get("BEDROCK_MODEL_ID") or "anthropic.claude-3-5-sonnet-20241022-v2:0"
+REGION = os.environ.get("AWS_REGION") or "us-east-1"
 MAX_TOOL_HOPS = 5  # hard stop against infinite tool-call loops
 
 _client = None

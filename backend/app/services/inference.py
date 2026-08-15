@@ -1,17 +1,12 @@
-"""
-Inference service.
-
-The model is loaded ONCE at import time, not per request - that is instructor
-review question #3. Right now this is a stub so the API can be built and tested
-before the CV engineer delivers models/model.pt. Swap the marked section only.
-"""
+"""Keras inference service. The trained model is loaded once at startup."""
 import io
 import json
-import random
 import time
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
+from tensorflow import keras
 
 from app.config import settings
 import logging
@@ -47,9 +42,17 @@ def _load_labels() -> list[str]:
 def load_model() -> None:
     global _model, _labels, _model_loaded
     _labels = _load_labels()
-    _model = None
-
+    model_path = Path(settings.model_path)
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model artifact not found: {model_path}")
+    _model = keras.models.load_model(model_path, compile=False)
+    output_classes = int(_model.output_shape[-1])
+    if output_classes != len(_labels):
+        raise ValueError(
+            f"Model outputs {output_classes} classes but labels.json contains {len(_labels)} labels"
+        )
     _model_loaded = True
+    log.info("Loaded Keras model %s with input shape %s", model_path, _model.input_shape)
 
 
 def is_loaded() -> bool:
@@ -61,6 +64,8 @@ def get_labels() -> list[str]:
 
 
 def run_inference(image_bytes: bytes) -> dict:
+    if _model is None or not _model_loaded:
+        raise RuntimeError("Model is not loaded")
     try:
         img = Image.open(io.BytesIO(image_bytes))
         img.verify()                      
@@ -70,13 +75,12 @@ def run_inference(image_bytes: bytes) -> dict:
 
     start = time.perf_counter()
 
-    # ---- REPLACE THIS BLOCK WITH THE REAL FORWARD PASS -----------------
-    labels = get_labels()
-    scores = sorted((random.random() for _ in labels), reverse=True)
-    total = sum(scores)
-    probs = [s / total for s in scores]
-    ranked = list(zip(labels, probs))
-    # --------------------------------------------------------------------
+    input_height = int(_model.input_shape[1])
+    input_width = int(_model.input_shape[2])
+    resized = img.resize((input_width, input_height), Image.Resampling.BILINEAR)
+    batch = np.asarray(resized, dtype=np.float32)[None, ...] / 255.0
+    probabilities = np.asarray(_model.predict(batch, verbose=0)[0], dtype=float)
+    ranked = sorted(zip(get_labels(), probabilities.tolist()), key=lambda item: item[1], reverse=True)
 
     elapsed_ms = (time.perf_counter() - start) * 1000
 

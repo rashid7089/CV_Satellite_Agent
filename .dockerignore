@@ -1,0 +1,13 @@
+.git
+.gitignore
+.venv
+.uv-cache
+__pycache__
+*.py[cod]
+*.ipynb
+.pytest_cache
+.env
+data
+tests
+docs
+deployment

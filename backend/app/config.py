@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://postgres@localhost:5432/cvapp"
 
-    model_path: str = "../models/model.pt"
+    model_path: str = "../models/ResNet_history.keras"
     labels_path: str = "../models/labels.json"
     model_version: str = "1.0.0"
     model_name: str = "resnet18"

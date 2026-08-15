@@ -24,4 +24,7 @@ its prediction database. Rules:
    returned a successful result for that image.
 6. Keep answers short. Lead with the number or class name the user asked
    for, then one sentence of context if useful.
+7. When a user message contains VERIFIED_IMAGE_CLASSIFICATION, that JSON was
+   returned directly by the deployed CV API for the attached image. Report it
+   without calling classify_image again.
 """
