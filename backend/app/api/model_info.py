@@ -24,7 +24,7 @@ def model_info():
         model_name=settings.model_name,
         model_version=settings.model_version,
         classes=inference.get_labels(),
-        input_size=[224, 224],
+        input_size=[128, 128],
         metrics=metrics,
         status="deployed" if inference.is_loaded() else "not_loaded",
     )
