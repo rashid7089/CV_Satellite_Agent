@@ -134,20 +134,32 @@ class TimeHistory(tf.keras.callbacks.Callback):
             logs['total_training_time'] = self.total_time
 
 
-name = "ResNet"
+name = "ConvNeXtTiny"
+keras_model = keras.applications.Vit
 print("="*50)
 print(name)
 print("="*50)
 
-model_save_path = MODELS_HISTORY_DIR / f"{name}_history.pkl"
+model_save_path = MODELS_DIR / f"{name}.keras"
+model_history_save_path = MODELS_HISTORY_DIR / f"{name}_history.pkl"
+
 data_file_path = DATA_DIR / "dataset.csv"
 time_callback = TimeHistory()
 
 
-resnet_model = create_model(keras.applications.ResNet50V2, name)
+resnet_model = create_model(keras_model, name)
 resnet_model.summary()
 resnet_history = resnet_model.fit(train_ds, epochs=5,  validation_data=val_ds, callbacks=[time_callback])
 
+resnet_history.model.save(model_save_path)
+
 # Save the history dictionary to a file
-with open(model_save_path, "wb") as file:
+with open(model_history_save_path, "wb") as file:
     pickle.dump(resnet_history, file)
+
+
+# ResNet18
+# MobileNetV3
+# EfficientNet-B0
+# ConvNeXt Tiny
+# ViT Tiny
