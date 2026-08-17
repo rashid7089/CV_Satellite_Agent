@@ -32,11 +32,30 @@ import httpx
 
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://backend:8000").rstrip("/")
 TIMEOUT_S = float(os.environ.get("BACKEND_TIMEOUT_S", "10"))
+BACKEND_USER_EMAIL = os.environ.get("BACKEND_USER_EMAIL", "")
+BACKEND_USER_PASSWORD = os.environ.get("BACKEND_USER_PASSWORD", "")
+_backend_token = ""
+
+
+def backend_auth_headers() -> dict[str, str]:
+    global _backend_token
+    if _backend_token:
+        return {"Authorization": f"Bearer {_backend_token}"}
+    if not BACKEND_USER_EMAIL or not BACKEND_USER_PASSWORD:
+        return {}
+    response = httpx.post(
+        f"{BACKEND_URL}/api/v1/auth/login",
+        json={"email": BACKEND_USER_EMAIL, "password": BACKEND_USER_PASSWORD},
+        timeout=TIMEOUT_S,
+    )
+    response.raise_for_status()
+    _backend_token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {_backend_token}"}
 
 
 def _get(path: str, params: dict | None = None) -> dict[str, Any]:
     try:
-        resp = httpx.get(f"{BACKEND_URL}{path}", params=params, timeout=TIMEOUT_S)
+        resp = httpx.get(f"{BACKEND_URL}{path}", params=params, headers=backend_auth_headers(), timeout=TIMEOUT_S)
         resp.raise_for_status()
         return resp.json()
     except httpx.HTTPStatusError as exc:

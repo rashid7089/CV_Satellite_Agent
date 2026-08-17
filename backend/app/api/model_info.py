@@ -13,7 +13,7 @@ router = APIRouter(tags=["model"])
 @router.get("/model", response_model=ModelInfoOut)
 def model_info():
     metrics = None
-    metrics_path = Path("../reports/model_metrics.json")
+    metrics_path = Path(settings.metrics_path)
     if metrics_path.exists():
         try:
             metrics = json.loads(metrics_path.read_text())

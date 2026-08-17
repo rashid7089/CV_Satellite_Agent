@@ -12,9 +12,11 @@ def save_prediction(
     image_bytes: bytes,
     result: dict,
     image_path: str | None = None,
+    user_id: int | None = None,
 ) -> Prediction:
     """Persist one inference result. Commits and returns the stored row."""
     row = Prediction(
+        user_id=user_id,
         image_name=image_name,
         image_path=image_path,
         image_hash=hashlib.sha256(image_bytes).hexdigest(),

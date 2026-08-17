@@ -8,13 +8,17 @@ from sklearn.model_selection import train_test_split
 SEED = 42
 IMAGE_SIZE = (128, 128)
 
-required_path = Path("./data/raw") # run it while you are in the training folder
+required_path = Path("./data/raw")
+raw_path = required_path / "data"
+if not raw_path.exists():
+    path = kagglehub.dataset_download(
+        "mahmoudreda55/satellite-image-classification",
+        output_dir=str(required_path),
+        force_download=False,
+    )
+    print("Path to dataset files:", path)
 
-path = kagglehub.dataset_download("mahmoudreda55/satellite-image-classification", output_dir=str(required_path), force_download=True)
-
-print("Path to dataset files:", path)
-
-raw_path = "./data/raw/data"
+raw_path = str(raw_path)
 output_path = "./data/processed"
 classes = sorted(os.listdir(raw_path))
 print("classes: ", classes)

@@ -1,16 +1,18 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health, history, model_info, predictions, stats
+from app.api import auth, health, history, model_info, monitoring, predictions, stats
 from app.config import settings
 from app.database import engine
 from app.models import Base
+from app.logging_config import configure_logging
 from app.services import inference
+from app.security import enforce_rate_limit
 
-logging.basicConfig(level=logging.INFO)
+configure_logging()
 log = logging.getLogger(__name__)
 
 
@@ -44,7 +46,10 @@ app.add_middleware(
 
 # /health sits at the root; everything else under /api/v1
 app.include_router(health.router)
-app.include_router(predictions.router, prefix="/api/v1")
-app.include_router(history.router, prefix="/api/v1")
-app.include_router(stats.router, prefix="/api/v1")
-app.include_router(model_info.router, prefix="/api/v1")
+limited = [Depends(enforce_rate_limit)]
+app.include_router(auth.router, prefix="/api/v1", dependencies=limited)
+app.include_router(predictions.router, prefix="/api/v1", dependencies=limited)
+app.include_router(history.router, prefix="/api/v1", dependencies=limited)
+app.include_router(stats.router, prefix="/api/v1", dependencies=limited)
+app.include_router(model_info.router, prefix="/api/v1", dependencies=limited)
+app.include_router(monitoring.router, prefix="/api/v1", dependencies=limited)

@@ -4,23 +4,26 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Prediction
+from app.models import User
+from app.auth import current_user
 from app.schemas import StatsOut
 
 router = APIRouter(tags=["stats"])
 
 
 @router.get("/stats", response_model=StatsOut)
-def stats(db: Session = Depends(get_db)):
-    total = db.scalar(select(func.count()).select_from(Prediction)) or 0
+def stats(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    owned = Prediction.user_id == user.id
+    total = db.scalar(select(func.count()).select_from(Prediction).where(owned)) or 0
 
     rows = db.execute(
         select(Prediction.predicted_class, func.count())
-        .group_by(Prediction.predicted_class)
+        .where(owned).group_by(Prediction.predicted_class)
         .order_by(func.count().desc())
     ).all()
 
-    avg_conf = db.scalar(select(func.avg(Prediction.confidence)))
-    avg_ms = db.scalar(select(func.avg(Prediction.inference_ms)))
+    avg_conf = db.scalar(select(func.avg(Prediction.confidence)).where(owned))
+    avg_ms = db.scalar(select(func.avg(Prediction.inference_ms)).where(owned))
 
     return StatsOut(
         total_predictions=total,

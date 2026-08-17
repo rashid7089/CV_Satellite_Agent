@@ -53,3 +53,36 @@ class HealthOut(BaseModel):
     api: str
     database: str
     model: str
+
+
+class AuthCredentials(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    email: str
+    created_at: datetime
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class BatchPredictionItem(BaseModel):
+    filename: str
+    prediction: PredictionOut | None = None
+    error: str | None = None
+
+
+class MonitoringOut(BaseModel):
+    total_predictions: int
+    predictions_last_24h: int
+    average_confidence: float | None = None
+    low_confidence_rate: float | None = None
+    average_inference_ms: float | None = None
+    model_versions: dict[str, int]

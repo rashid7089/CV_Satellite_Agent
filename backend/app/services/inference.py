@@ -7,6 +7,7 @@ app/main.py; run_inference() is called by POST /api/v1/predict.
 """
 
 import io
+import hashlib
 import json
 import logging
 import time
@@ -24,6 +25,7 @@ log = logging.getLogger(__name__)
 _model = None
 _labels: list[str] = []
 _model_loaded = False
+_engine = "none"
 
 # Must match the preprocessing used during training.
 INPUT_SIZE = (128, 128)          # (width, height) for PIL resize
@@ -63,7 +65,7 @@ def _load_labels() -> list[str]:
 
 def load_model() -> None:
     """Load the .keras artifact once at application startup."""
-    global _model, _labels, _model_loaded
+    global _model, _labels, _model_loaded, _engine
     _labels = _load_labels()
 
     path = Path(settings.model_path)
@@ -73,8 +75,19 @@ def load_model() -> None:
         return
 
     try:
-        _model = keras.models.load_model(path, compile=False)
-        output_classes = int(_model.output_shape[-1])
+        if path.suffix.lower() == ".onnx":
+            import onnxruntime as ort
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            available = set(ort.get_available_providers())
+            _model = ort.InferenceSession(str(path), providers=[p for p in providers if p in available])
+            output_classes = len(_labels)
+            _engine = "onnxruntime"
+            output_shape = _model.get_outputs()[0].shape
+        else:
+            _model = keras.models.load_model(path, compile=False)
+            output_classes = int(_model.output_shape[-1])
+            _engine = "keras"
+            output_shape = _model.output_shape
         if output_classes != len(_labels):
             raise ValueError(
                 f"Model outputs {output_classes} classes but labels.json contains {len(_labels)} labels"
@@ -83,13 +96,14 @@ def load_model() -> None:
 
         log.info(
             "Model loaded: %d classes, input %s, output shape %s",
-            len(_labels), INPUT_SIZE, _model.output_shape,
+            len(_labels), INPUT_SIZE, output_shape,
         )
 
     except Exception:
         log.exception("Failed to load model from %s", path)
         _model = None
         _model_loaded = False
+        _engine = "none"
 
 
 def is_loaded() -> bool:
@@ -98,6 +112,20 @@ def is_loaded() -> bool:
 
 def get_labels() -> list[str]:
     return _labels or _load_labels()
+
+
+def get_engine() -> str:
+    return _engine
+
+
+def _cache_client():
+    if not settings.redis_url:
+        return None
+    try:
+        import redis
+        return redis.Redis.from_url(settings.redis_url, decode_responses=True)
+    except Exception:
+        return None
 
 
 def _preprocess(img: Image.Image) -> np.ndarray:
@@ -129,10 +157,26 @@ def run_inference(image_bytes: bytes) -> dict:
     if _model is None:
         raise RuntimeError("Model is not loaded")
 
+    cache_key = f"cv:inference:{settings.model_version}:{hashlib.sha256(image_bytes).hexdigest()}"
+    cache = _cache_client()
+    if cache:
+        try:
+            cached = cache.get(cache_key)
+            if cached:
+                result = json.loads(cached)
+                result["cache_hit"] = True
+                return result
+        except Exception:
+            cache = None
+
     start = time.perf_counter()
 
     batch = _preprocess(img)
-    probs = np.asarray(_model.predict(batch, verbose=0)[0], dtype=np.float64)
+    if _engine == "onnxruntime":
+        input_name = _model.get_inputs()[0].name
+        probs = np.asarray(_model.run(None, {input_name: batch})[0][0], dtype=np.float64)
+    else:
+        probs = np.asarray(_model.predict(batch, verbose=0)[0], dtype=np.float64)
 
     elapsed_ms = (time.perf_counter() - start) * 1000
 
@@ -149,10 +193,17 @@ def run_inference(image_bytes: bytes) -> dict:
         for i in top_idx
     ]
 
-    return {
+    result = {
         "predicted_class": top[0]["class_name"],
         "confidence": top[0]["probability"],
         "top_predictions": top,
         "inference_ms": round(elapsed_ms, 3),
         "model_version": settings.model_version,
+        "cache_hit": False,
     }
+    if cache:
+        try:
+            cache.setex(cache_key, settings.inference_cache_seconds, json.dumps(result))
+        except Exception:
+            pass
+    return result

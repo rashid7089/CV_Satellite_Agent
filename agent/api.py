@@ -15,9 +15,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from agent.agent import MODEL_ID, run_agent_turn
+from agent.tools import backend_auth_headers
 
 PUBLIC_MODEL_ID = os.environ.get("AGENT_MODEL_NAME") or "satellite-cv-agent"
-API_KEY = os.environ.get("AGENT_API_KEY") or "local-agent-key"
 BACKEND_URL = (os.environ.get("BACKEND_URL") or "http://backend:8000").rstrip("/")
 
 app = FastAPI(title="Satellite CV Bedrock Agent", version="1.0.0")
@@ -37,8 +37,9 @@ class ChatRequest(BaseModel):
 
 
 def _authorize(authorization: str | None) -> None:
-    if authorization != f"Bearer {API_KEY}":
-        raise HTTPException(status_code=401, detail="Invalid agent API key")
+    # Open WebUI may send an OpenAI-style Authorization header, but user
+    # authentication is handled by email/password in the application backend.
+    return None
 
 
 def _text(content: str | list | None) -> str:
@@ -92,6 +93,7 @@ def _classify_attached_images(messages: list[ChatMessage]) -> list[dict]:
                 response = httpx.post(
                     f"{BACKEND_URL}/api/v1/predict",
                     files={"image": ("openwebui-upload", raw, mime)},
+                    headers=backend_auth_headers(),
                     timeout=60,
                 )
                 response.raise_for_status()

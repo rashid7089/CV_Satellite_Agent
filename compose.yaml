@@ -1,4 +1,14 @@
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -16,15 +26,27 @@ services:
     build: {context: ., dockerfile: backend/Dockerfile}
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cvuser}:${POSTGRES_PASSWORD:-cvpassword}@postgres:5432/${POSTGRES_DB:-cvapp}
-      MODEL_PATH: /app/models/ResNet_history.keras
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://cvuser:cvpassword@postgres:5432/cvapp}
+      MODEL_PATH: /app/models/model.onnx
       LABELS_PATH: /app/models/labels.json
-      MODEL_NAME: ${MODEL_NAME:-ResNet18}
+      MODEL_NAME: ${MODEL_NAME:-ResNet50V2}
+      METRICS_PATH: /app/reports/model_metrics.json
       MODEL_VERSION: ${MODEL_VERSION:-1.0.0}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+      AUTH_SECRET: ${AUTH_SECRET:-change-this-auth-secret-in-production}
+      ACCESS_TOKEN_HOURS: ${ACCESS_TOKEN_HOURS:-24}
+      REDIS_URL: redis://redis:6379/0
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-60}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      INFERENCE_CACHE_SECONDS: ${INFERENCE_CACHE_SECONDS:-3600}
+      STORE_IMAGES: ${STORE_IMAGES:-false}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
     depends_on:
       postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
     ports: ["${BACKEND_PORT:-8000}:8000"]
   frontend:
     build: {context: ., dockerfile: frontend/Dockerfile}
@@ -42,8 +64,12 @@ services:
       AWS_REGION: ${AWS_REGION:-us-east-1}
       BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID:-anthropic.claude-3-5-sonnet-20241022-v2:0}
       BACKEND_URL: http://backend:8000
-      AGENT_API_KEY: ${AGENT_API_KEY:-local-agent-key}
+      BACKEND_USER_EMAIL: ${BACKEND_USER_EMAIL:-}
+      BACKEND_USER_PASSWORD: ${BACKEND_USER_PASSWORD:-}
       AGENT_MODEL_NAME: ${AGENT_MODEL_NAME:-satellite-cv-agent}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
     depends_on:
       backend: {condition: service_healthy}
     ports: ["${AGENT_PORT:-8010}:8010"]
@@ -56,8 +82,11 @@ services:
       ENABLE_OLLAMA_API: "false"
       ENABLE_OPENAI_API: "true"
       OPENAI_API_BASE_URL: http://agent:8010/v1
-      OPENAI_API_KEY: ${AGENT_API_KEY:-local-agent-key}
+      OPENAI_API_KEY: not-required
       ENABLE_PERSISTENT_CONFIG: "false"
+      ENABLE_AUDIO_TRANSCRIPTION: ${ENABLE_AUDIO_TRANSCRIPTION:-true}
+      AUDIO_STT_ENGINE: ${AUDIO_STT_ENGINE:-web_api}
+      AUDIO_TTS_ENGINE: ${AUDIO_TTS_ENGINE:-web_api}
       AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST: "30"
     depends_on:
       agent: {condition: service_healthy}
@@ -65,4 +94,8 @@ services:
     ports: ["${OPEN_WEBUI_PORT:-8080}:8080"]
 volumes:
   postgres_data:
+    name: cv_satellite_postgres_data
   open_webui_data:
+    name: cv_satellite_open_webui_data
+  redis_data:
+    name: cv_satellite_redis_data
